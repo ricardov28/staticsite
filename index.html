@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0/dist/Chart.min.js" type="text/javascript"
+        charset="utf-8"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", async function (event) {
+            const res = await fetch(`https://fromiottoweb.azurewebsites.net/api/negotiate?id=${1}`);
+            const data = await res.json();
+            const webSocket = new WebSocket(data.url);
+            let lastMessageReceivedTime = Date.now();
+
+            webSocket.onopen = function onOpen() {
+                console.log('WebSocket connection is open');
+            };
+
+            webSocket.onclose = function onClose() {
+                console.log('WebSocket connection is closed');
+            };
+
+            webSocket.onerror = function onError(error) {
+                console.error('WebSocket error:', error);
+            };
+
+            webSocket.onmessage = function onMessage(message) {
+                try {
+                    const messageData = JSON.parse(message.data);
+                    console.log(messageData);
+
+                    const iotData = JSON.parse(messageData.IotData.replace(/'/g, '"'));
+                    lastMessageReceivedTime = Date.now();
+
+                    // Clear existing table
+                    const table = document.getElementById('iotDataTable');
+                    table.innerHTML = '';
+
+                    // Create table headers
+                    const headerRow = table.insertRow();
+                    const headers = ['Device ID', 'Message Date', 'Latitude', 'Longitude', 'Altitude', 'Pitch', 'Yaw',
+                        'Roll', 'Ground Speed', 'Horizontal Speed', 'Voltage', 'Battery Level'
+                    ];
+                    headers.forEach((headerText) => {
+                        const headerCell = document.createElement('th');
+                        headerCell.innerText = headerText;
+                        headerRow.appendChild(headerCell);
+                    });
+
+                    // Create table data
+                    const dataRow = table.insertRow();
+                    const data = [
+                        iotData.deviceId,
+                        formatMessageDate(messageData.MessageDate),
+                        iotData.latitude,
+                        iotData.longitude,
+                        iotData.altitude,
+                        iotData.pitch,
+                        iotData.yaw,
+                        iotData.roll,
+                        iotData['ground speed'], // Use lowercase keys here
+                        iotData['horizontal speed'], // Use lowercase keys here
+                        iotData.Voltage,
+                        iotData['Battery Level'] // Use lowercase keys here
+                    ];
+                    data.forEach((dataValue) => {
+                        const dataCell = document.createElement('td');
+                        dataCell.innerText = dataValue;
+                        dataRow.appendChild(dataCell);
+                    });
+
+                    // Display ASCII images based on roll and pitch values
+                    displayAsciiImages(iotData.roll, iotData.pitch);
+                } catch (err) {
+                    console.error(err);
+                }
+            };
+
+            function formatMessageDate(dateString) {
+                const date = new Date(dateString);
+                const hour = date.toLocaleString('en-US', {
+                    hour: 'numeric',
+                    hour12: true
+                });
+                const minute = date.getMinutes();
+                const second = date.getSeconds();
+                return `${hour}:${minute}:${second}`;
+            }
+
+            function displayAsciiImages(roll, pitch) {
+                var rollAsciiImage = "";
+                var pitchAsciiImage = "";
+
+                if (roll >= -5 && roll <= 5) {
+                    rollAsciiImage = `<pre>
+    __!__
+    @____(_)____@
+    !  !  !
+</pre>`;
+
+                } else if (roll > 5 && roll <= 40) {
+                    rollAsciiImage = `<pre>
+    @  __!__
+       \\__(_)___
+          !  !  ! \\@
+</pre>`;
+
+                
+                } else if (roll > 40 && roll <= 90) {
+                    rollAsciiImage = `<pre>
+@  
+      \\ __/__
+      \\_(_)_
+	  / / / \\
+		   \\@
+</pre>`;
+                
+               } else if (roll > -40 && roll <= -5) {
+                    rollAsciiImage = `<pre>
+        __!__   @
+       __(_)___/
+    @/ !  !  ! 
+</pre>`;
+
+                
+                } else if (roll > -90 && roll <= -40) {
+                    rollAsciiImage = `<pre>
+               @  
+      __\\__ /
+      _(_)_/
+   / \\ \\ \\ 
+ @/	   
+</pre>`;
+				}
+				
+                if (pitch >= -5 && pitch <= 5) {
+                    pitchAsciiImage = `<pre>
+    |\\_______
+      \\°°°°°° \`)
+       ‾‾‾‾‾‾‾
+</pre>`;
+                } else if (pitch > -40 && pitch <= -5) {
+                    pitchAsciiImage = `<pre>
+    |\\
+           \\°\\____
+              ‾\\°°°°\`)
+                 ‾‾‾‾
+</pre>`;
+                } else if (pitch > -100 && pitch <= -40) {
+                    pitchAsciiImage = `<pre>
+   |_\\
+      \\°\\
+          ‾\\°\\
+               ‾\\°\\
+                    \\°‾\`)
+                     ‾‾‾
+</pre>`;
+				} else if (pitch > 5 && pitch <= 40) {
+                    pitchAsciiImage = `<pre>
+           ___
+          /°°°\`)
+    /°/
+|_\/°/
+	</pre>`;
+                } else if (pitch > 40 && pitch <= 90) {
+                    pitchAsciiImage = `<pre>
+          /^\\
+	/°/
+      /°/
+ |_\\/°/
+                
+                    
+</pre>`;
+                }
+
+                const rollAsciiImageContainer = document.getElementById('rollAsciiImage');
+                rollAsciiImageContainer.innerHTML = rollAsciiImage;
+
+                const pitchAsciiImageContainer = document.getElementById('pitchAsciiImage');
+                pitchAsciiImageContainer.innerHTML = pitchAsciiImage;
+            }
+
+            function removeTelemetryRowIfInactive() {
+                const currentTime = Date.now();
+                const inactiveTimeThreshold = 10000; // 10 seconds
+
+                if (currentTime - lastMessageReceivedTime > inactiveTimeThreshold) {
+                    const table = document.getElementById('iotDataTable');
+                    table.innerHTML = '';
+                }
+
+                setTimeout(removeTelemetryRowIfInactive, inactiveTimeThreshold);
+            }
+
+            removeTelemetryRowIfInactive();
+        });
+    </script>
+    <style>
+        body {
+            font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+            padding: 50px;
+            margin: 0;
+            text-align: center;
+        }
+
+        .flexHeader {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            justify-content: space-between;
+        }
+
+        #charts {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            align-content: stretch;
+        }
+
+        .chartContainer {
+            flex: 1;
+            flex-basis: 40%;
+            min-width: 30%;
+            max-width: 100%;
+        }
+
+        a {
+            color: #00B7FF;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th,
+        td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .asciiImageContainer {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-around;
+            margin-top: 20px;
+        }
+    </style>
+
+    <title>Device Data Real-time Monitoring</title>
+</head>
+
+<body>
+    <h1 class="flexHeader">
+        <span>Device Data Real-time Monitoring</span>
+    </h1>
+    <div id="charts">
+        <canvas id="chart"></canvas>
+    </div>
+    <div>
+        <h3>IoT Data:</h3>
+        <table id="iotDataTable">
+            <tr>
+                <th>Device ID</th>
+                <th>Message Date</th>
+                <th>Latitude</th>
+                <th>Longitude</th>
+                <th>Altitude</th>
+                <th>Pitch</th>
+                <th>Yaw</th>
+                <th>Roll</th>
+                <th>Ground Speed</th>
+                <th>Horizontal Speed</th>
+                <th>Voltage</th>
+                <th>Battery Level</th>
+            </tr>
+        </table>
+    </div>
+    <div class="asciiImageContainer">
+        <div>
+            <h3>Roll Value ASCII Image:</h3>
+            <div id="rollAsciiImage"></div>
+        </div>
+        <div>
+            <h3>Pitch Value ASCII Image:</h3>
+            <div id="pitchAsciiImage"></div>
+        </div>
+    </div>
+</body>
+
+</html>
